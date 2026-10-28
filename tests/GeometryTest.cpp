@@ -1,4 +1,5 @@
 // Standalone tests for MosaicGeometry (no Stellarium/Qt needed).
+// Copyright (C) 2026 Mario Keller, GNU GPL v2 or later.
 #include "MosaicGeometry.hpp"
 
 #include <cmath>

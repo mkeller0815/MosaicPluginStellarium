@@ -46,4 +46,6 @@ After installing, restart Stellarium. The plug-in loads by default. Open it with
 
 ## License
 
+Copyright (C) 2026 Mario Keller
+
 GNU GPL v2 or later (the same as Stellarium). See [COPYING](COPYING) for the full license text.

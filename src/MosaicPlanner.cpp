@@ -1,5 +1,6 @@
 /*
  * Mosaic Planner plug-in for Stellarium
+ * Copyright (C) 2026 Mario Keller
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -49,7 +50,7 @@ StelPluginInfo MosaicPlannerStelPluginInterface::getPluginInfo() const
 	StelPluginInfo info;
 	info.id = "MosaicPlanner";
 	info.displayedName = N_("Mosaic Planner");
-	info.authors = "mkl0815";
+	info.authors = "Mario Keller";
 	info.contact = "mkl0815@googlemail.com";
 	info.description = N_("Plan multi-panel mosaics for astrophotography directly on the sky. "
 	                      "The panel size and rotation are taken from the telescope, sensor and lens "
