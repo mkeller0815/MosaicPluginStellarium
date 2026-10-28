@@ -180,7 +180,9 @@ jobs:
              xattr -dr com.apple.quarantine MosaicPlanner
              \`\`\`
              The \`xattr\` step is required: the plug-in isn't notarized by Apple, so macOS blocks a downloaded copy until the download flag is removed.
-          3. Start Stellarium and use the Mosaic Planner toolbar button.
+          3. Start Stellarium. Left-click the Mosaic Planner button in the bottom toolbar to show the mosaic, right-click it to open the Mosaic Planner window.
+
+          How to use the plug-in: [user guide](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/docs/USAGE.md). Changes: [CHANGELOG](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/CHANGELOG.md).
 
           More details and troubleshooting are in the [README](https://github.com/$GITHUB_REPOSITORY#installation-macos).
           SHA-256 checksums are in \`SHA256SUMS.txt\`.

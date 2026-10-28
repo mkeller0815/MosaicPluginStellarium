@@ -24,6 +24,8 @@ Conventions: coordinates are J2000. The position angle is the direction of the s
 - **Keyboard:** `Ctrl+Alt+G` shows or hides the mosaic. A shortcut for the window can be assigned under *Configuration → Keyboard shortcuts → Mosaic Planner*.
 - The window can also be opened from *Configuration → Plugins → Mosaic Planner → configure*.
 
+See the **[user guide](docs/USAGE.md)** for a step-by-step walkthrough of every option, exporting to capture software, and scripting.
+
 ## Installation (macOS)
 
 Requirements: Stellarium **24.1 or newer** on macOS (Apple Silicon or Intel). The plug-in must match your Stellarium version exactly. Releases contain one zip per Stellarium version; check yours under *Help → About*. To use the Oculars framing, enable the Oculars plug-in and set up at least one telescope and one sensor there.
