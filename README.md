@@ -18,6 +18,33 @@ The panel size and rotation come from the **telescope, sensor and lens selected 
 
 Conventions: coordinates are J2000. The position angle is the direction of the sensor's "up" axis (the short side for a landscape sensor), measured from north through east. This is the same convention as the Telescopius CSV. Oculars' rotation angle is the negative of this.
 
+## Installation (macOS)
+
+Requirements: **Stellarium 25.3** on macOS (Apple Silicon or Intel). The plug-in must match the Stellarium version exactly. To use the Oculars framing, enable the Oculars plug-in and set up at least one telescope and one sensor there.
+
+1. Download `MosaicPlanner-<version>-Stellarium-25.3-macOS.zip` from the [Releases](https://github.com/mkeller0815/MosaicPluginStellarium/releases) page.
+2. Quit Stellarium.
+3. Unpack the zip and install it in Terminal:
+
+   ```sh
+   mkdir -p ~/Library/Application\ Support/Stellarium/modules
+   cd ~/Library/Application\ Support/Stellarium/modules
+   unzip -o ~/Downloads/MosaicPlanner-*-Stellarium-25.3-macOS.zip
+   xattr -dr com.apple.quarantine MosaicPlanner
+   ```
+
+   The result must be `~/Library/Application Support/Stellarium/modules/MosaicPlanner/libMosaicPlanner.dylib`.
+
+   The `xattr` step is required. The plug-in is not notarized by Apple, so macOS refuses to load a downloaded copy until the download ("quarantine") flag is removed.
+   If you prefer Finder: open the folder with *Go → Go to Folder…*, paste `~/Library/Application Support/Stellarium/modules`, drag the unpacked `MosaicPlanner` folder into it, then run only the `xattr` line above with the full path.
+4. Start Stellarium. The Mosaic Planner button appears in the bottom toolbar: left-click opens the window, right-click shows or hides the mosaic.
+   If it doesn't appear, enable *Load at startup* for Mosaic Planner under *Configuration → Plugins* and restart.
+
+**Troubleshooting:** if the plug-in doesn't load, open `~/Library/Application Support/Stellarium/log.txt` and search for `MosaicPlanner`.
+"library load disallowed by system policy" means the `xattr` step was skipped. Any other load error usually means a different Stellarium version.
+
+**Uninstall:** quit Stellarium and delete the `modules/MosaicPlanner` folder.
+
 ## Building (macOS)
 
 You need:
