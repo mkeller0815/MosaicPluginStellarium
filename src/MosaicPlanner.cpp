@@ -103,22 +103,46 @@ Vec3 rotateAround(const Vec3& v, const Vec3& k, double angle)
 	return v * c + k.cross(v) * s + k * (k.dot(v) * (1. - c));
 }
 
+// Toolbar icon in the style of Stellarium's own buttons: 160x160, a white disc with a glow
+// when switched on, a grey disc when off, with a 2x2 mosaic of tilted panels as symbol.
 QPixmap makeToolbarIcon(bool on)
 {
-	const int size = 32;
+	const int size = 160;
+	const QPointF center(size / 2., size / 2.);
+	const double radius = 62.;
 	QPixmap pix(size, size);
 	pix.fill(Qt::transparent);
 	QPainter p(&pix);
 	p.setRenderHint(QPainter::Antialiasing);
-	const QColor color = on ? QColor(255, 255, 255) : QColor(150, 150, 150);
-	p.translate(size / 2., size / 2.);
+	p.setPen(Qt::NoPen);
+	QColor symbolColor;
+	if (on)
+	{
+		QRadialGradient glow(center, size / 2.);
+		glow.setColorAt(0.70, QColor(255, 255, 255, 150));
+		glow.setColorAt(1.00, QColor(255, 255, 255, 0));
+		p.setBrush(glow);
+		p.drawEllipse(center, size / 2., size / 2.);
+		p.setBrush(QColor(255, 255, 255));
+		p.drawEllipse(center, radius, radius);
+		symbolColor = QColor(105, 105, 105);
+	}
+	else
+	{
+		p.setBrush(QColor(100, 100, 100));
+		p.drawEllipse(center, radius, radius);
+		symbolColor = QColor(255, 255, 255);
+	}
+
+	p.translate(center);
 	p.rotate(-15.);
-	p.setPen(QPen(color, 1.6));
-	// 2x2 overlapping panels
-	const double w = 12., h = 9.;
-	for (int r = 0; r < 2; ++r)
-		for (int c = 0; c < 2; ++c)
-			p.drawRect(QRectF(-(2. * w - 3.) / 2. + c * (w - 3.), -(2. * h - 2.) / 2. + r * (h - 2.), w, h));
+	p.setPen(QPen(symbolColor, 6., Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+	p.setBrush(Qt::NoBrush);
+	const double w = 44., h = 32., overlap = 10.;
+	for (int row = 0; row < 2; ++row)
+		for (int col = 0; col < 2; ++col)
+			p.drawRect(QRectF(-(2. * w - overlap) / 2. + col * (w - overlap),
+			                  -(2. * h - overlap) / 2. + row * (h - overlap), w, h));
 	return pix;
 }
 
@@ -190,7 +214,7 @@ void MosaicPlanner::init()
 
 	dialog = new MosaicPlannerDialog(this);
 
-	addAction("actionShow_MosaicPlanner", N_("Mosaic Planner"), N_("Show mosaic"), "enabled");
+	addAction("actionShow_MosaicPlanner", N_("Mosaic Planner"), N_("Show mosaic plan"), "enabled", "Ctrl+Alt+G");
 	addAction("actionShow_MosaicPlanner_dialog", N_("Mosaic Planner"), N_("Mosaic Planner window"), dialog, "visible");
 	addAction("actionMosaicPlanner_editMode", N_("Mosaic Planner"), N_("Move/rotate mosaic with the mouse"), "editMode");
 	addAction("actionMosaicPlanner_centerOnSelection", N_("Mosaic Planner"), N_("Center mosaic on selected object"), "centerOnSelectedObject()");
@@ -198,13 +222,14 @@ void MosaicPlanner::init()
 	StelGui* gui = dynamic_cast<StelGui*>(StelApp::getInstance().getGui());
 	if (gui)
 	{
+		// Left click toggles the mosaic, right click opens the window (like other plug-ins)
 		toolbarButton = new StelButton(nullptr,
 		                               makeToolbarIcon(true),
 		                               makeToolbarIcon(false),
 		                               QPixmap(":/graphicGui/miscGlow32x32.png"),
-		                               "actionShow_MosaicPlanner_dialog",
+		                               "actionShow_MosaicPlanner",
 		                               false,
-		                               "actionShow_MosaicPlanner");
+		                               "actionShow_MosaicPlanner_dialog");
 		gui->getButtonBar()->addButton(toolbarButton, "065-pluginsGroup");
 	}
 

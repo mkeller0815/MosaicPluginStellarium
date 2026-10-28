@@ -18,6 +18,12 @@ The panel size and rotation come from the **telescope, sensor and lens selected 
 
 Conventions: coordinates are J2000. The position angle is the direction of the sensor's "up" axis (the short side for a landscape sensor), measured from north through east. This is the same convention as the Telescopius CSV. Oculars' rotation angle is the negative of this.
 
+## Usage
+
+- **Toolbar button** (bottom bar): left-click shows or hides the mosaic, right-click opens the Mosaic Planner window.
+- **Keyboard:** `Ctrl+Alt+G` shows or hides the mosaic. A shortcut for the window can be assigned under *Configuration → Keyboard shortcuts → Mosaic Planner*.
+- The window can also be opened from *Configuration → Plugins → Mosaic Planner → configure*.
+
 ## Installation (macOS)
 
 Requirements: Stellarium **24.1 or newer** on macOS (Apple Silicon or Intel). The plug-in must match your Stellarium version exactly. Releases contain one zip per Stellarium version; check yours under *Help → About*. To use the Oculars framing, enable the Oculars plug-in and set up at least one telescope and one sensor there.
@@ -37,7 +43,8 @@ Requirements: Stellarium **24.1 or newer** on macOS (Apple Silicon or Intel). Th
 
    The `xattr` step is required. The plug-in is not notarized by Apple, so macOS refuses to load a downloaded copy until the download ("quarantine") flag is removed.
    If you prefer Finder: open the folder with *Go → Go to Folder…*, paste `~/Library/Application Support/Stellarium/modules`, drag the unpacked `MosaicPlanner` folder into it, then run only the `xattr` line above with the full path.
-4. Start Stellarium. The Mosaic Planner button appears in the bottom toolbar: left-click opens the window, right-click shows or hides the mosaic.
+4. Start Stellarium. The Mosaic Planner button (a disc with four overlapping panels) appears in the bottom toolbar, which shows up when you move the mouse to the bottom edge:
+   **left-click** shows or hides the mosaic, **right-click** opens the Mosaic Planner window.
    If it doesn't appear, enable *Load at startup* for Mosaic Planner under *Configuration → Plugins* and restart.
 
 **Troubleshooting:** if the plug-in doesn't load, open `~/Library/Application Support/Stellarium/log.txt` and search for `MosaicPlanner`.
@@ -63,7 +70,7 @@ cmake --install build           # -> ~/Library/Application Support/Stellarium/mo
 
 The plug-in links against the Stellarium executable (`-bundle_loader`) and the Qt frameworks inside `Stellarium.app` (`-DSTELLARIUM_APP=...`). It is built as a universal binary (arm64 + x86_64).
 
-After installing, restart Stellarium. The plug-in loads by default. Open it with the toolbar button: left-click opens the window, right-click toggles the overlay. It also appears under Configuration → Plugins.
+After installing, restart Stellarium. The plug-in loads by default.
 
 ## Automated builds and releases
 
