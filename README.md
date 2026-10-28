@@ -20,16 +20,16 @@ Conventions: coordinates are J2000. The position angle is the direction of the s
 
 ## Installation (macOS)
 
-Requirements: **Stellarium 25.3** on macOS (Apple Silicon or Intel). The plug-in must match the Stellarium version exactly. To use the Oculars framing, enable the Oculars plug-in and set up at least one telescope and one sensor there.
+Requirements: Stellarium **24.1 or newer** on macOS (Apple Silicon or Intel). The plug-in must match your Stellarium version exactly. Releases contain one zip per Stellarium version; check yours under *Help → About*. To use the Oculars framing, enable the Oculars plug-in and set up at least one telescope and one sensor there.
 
-1. Download `MosaicPlanner-<version>-Stellarium-25.3-macOS.zip` from the [Releases](https://github.com/mkeller0815/MosaicPluginStellarium/releases) page.
+1. Download `MosaicPlanner-<plug-in version>-Stellarium-<your Stellarium version>-macOS.zip` from the [Releases](https://github.com/mkeller0815/MosaicPluginStellarium/releases) page.
 2. Quit Stellarium.
 3. Unpack the zip and install it in Terminal:
 
    ```sh
    mkdir -p ~/Library/Application\ Support/Stellarium/modules
    cd ~/Library/Application\ Support/Stellarium/modules
-   unzip -o ~/Downloads/MosaicPlanner-*-Stellarium-25.3-macOS.zip
+   unzip -o ~/Downloads/MosaicPlanner-*-Stellarium-<your Stellarium version>-macOS.zip
    xattr -dr com.apple.quarantine MosaicPlanner
    ```
 
@@ -49,7 +49,7 @@ Requirements: **Stellarium 25.3** on macOS (Apple Silicon or Intel). The plug-in
 
 You need:
 
-- A Stellarium source tree for **exactly** the version you run (here 25.3). Only its headers are used.
+- A Stellarium source tree for **exactly** the version you run (the example below uses 25.3). Only its headers are used.
 - Qt 6 headers that are **not newer** than the Qt inside Stellarium.app (Stellarium 25.3 ships Qt 6.9.2).
 
 ```sh
@@ -63,6 +63,21 @@ cmake --install build           # -> ~/Library/Application Support/Stellarium/mo
 The plug-in links against the Stellarium executable (`-bundle_loader`) and the Qt frameworks inside `Stellarium.app` (`-DSTELLARIUM_APP=...`). It is built as a universal binary (arm64 + x86_64).
 
 After installing, restart Stellarium. The plug-in loads by default. Open it with the toolbar button: left-click opens the window, right-click toggles the overlay. It also appears under Configuration → Plugins.
+
+## Automated builds and releases
+
+The [Build workflow](.github/workflows/build.yml) builds the plug-in for every Stellarium version in `DEFAULT_STELLARIUM_VERSIONS` (currently 24.1 to 26.3). For each version it downloads the official macOS app, checks out the matching sources and installs the exact Qt version bundled with that app.
+
+- **Push or pull request:** builds all versions as a compatibility check. The zips are available as run artifacts.
+- **Manual run** (*Actions → Build → Run workflow*): builds only the Stellarium versions you enter, e.g. `26.3`.
+- **Version tag:** builds all versions and attaches the zips and `SHA256SUMS.txt` to the GitHub release. The release is only published if every version built successfully.
+
+To publish a new release:
+
+1. Set the new version in `project(MosaicPlanner VERSION x.y.z ...)` in `CMakeLists.txt` and commit.
+2. Tag and push: `git tag -a vx.y.z -m "Mosaic Planner x.y.z" && git push origin main vx.y.z`. The tag must match the version in `CMakeLists.txt`, otherwise the workflow stops.
+
+When a new Stellarium version comes out, add it to `DEFAULT_STELLARIUM_VERSIONS` and publish a new release.
 
 ## Limitations
 
