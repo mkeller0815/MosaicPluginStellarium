@@ -40,11 +40,31 @@
 #ifndef MOSAICPLANNER_VERSION
 #define MOSAICPLANNER_VERSION "unknown"
 #endif
+// The Stellarium version ("major.minor") the plug-in was built for, set in CMakeLists.txt
+#ifndef MOSAICPLANNER_STELLARIUM_VERSION
+#error "MOSAICPLANNER_STELLARIUM_VERSION must be defined"
+#endif
 
 using mosaic::Vec3;
 
+// Stellarium has no stable ABI: loading a plug-in built for another version crashes.
+// Only plain exported functions are used here, which are safe to call in any version.
+static bool isBuiltForRunningStellarium()
+{
+	return StelUtils::getApplicationPublicVersion() == QLatin1String(MOSAICPLANNER_STELLARIUM_VERSION);
+}
+
 StelModule* MosaicPlannerStelPluginInterface::getStelModule() const
 {
+	if (!isBuiltForRunningStellarium())
+	{
+		qWarning().noquote() << "[MosaicPlanner] This build of the plug-in is for Stellarium" << MOSAICPLANNER_STELLARIUM_VERSION
+		                     << "but this is Stellarium" << StelUtils::getApplicationPublicVersion()
+		                     << "- the plug-in is not loaded. Download the matching version from"
+		                     << "https://github.com/mkeller0815/MosaicPluginStellarium/releases";
+		// Stellarium skips plug-ins that return no module
+		return nullptr;
+	}
 	return new MosaicPlanner();
 }
 
@@ -60,7 +80,12 @@ StelPluginInfo MosaicPlannerStelPluginInterface::getPluginInfo() const
 	                      "selected in the Oculars plug-in (or from a manual setup). "
 	                      "Panels can be moved and rotated with the mouse and exported as CSV in the "
 	                      "Telescopius format for N.I.N.A., ASIAIR and other capture software.");
-	info.version = MOSAICPLANNER_VERSION;
+	if (!isBuiltForRunningStellarium())
+		info.description = QString("<b>This build is for Stellarium %1 and will not be loaded into Stellarium %2. "
+		                           "Please install the matching version of the plug-in.</b><br>")
+		                           .arg(MOSAICPLANNER_STELLARIUM_VERSION, StelUtils::getApplicationPublicVersion())
+		                   + info.description;
+	info.version = QString("%1 (for Stellarium %2)").arg(MOSAICPLANNER_VERSION, MOSAICPLANNER_STELLARIUM_VERSION);
 	info.license = "GNU GPLv2 or later";
 	info.startByDefault = true;
 	return info;

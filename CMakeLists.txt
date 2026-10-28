@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(MosaicPlanner VERSION 0.1.0 LANGUAGES CXX)
+project(MosaicPlanner VERSION 0.1.1 LANGUAGES CXX)
 
 # Mosaic Planner - an external (dynamically loaded) plug-in for Stellarium.
 #
@@ -28,6 +28,27 @@ endif()
 
 if(NOT EXISTS "${STELLARIUM_SOURCE_DIR}/src/core/StelModule.hpp")
 	message(FATAL_ERROR "STELLARIUM_SOURCE_DIR does not point to a Stellarium source tree: ${STELLARIUM_SOURCE_DIR}")
+endif()
+
+# The Stellarium version the plug-in is built for, e.g. "26.3". At runtime the plug-in
+# refuses to load into any other version, because Stellarium's ABI changes between releases.
+file(STRINGS "${STELLARIUM_SOURCE_DIR}/CMakeLists.txt" STEL_MAJOR_LINE REGEX "^SET\\(STELLARIUM_MAJOR [0-9]+\\)")
+file(STRINGS "${STELLARIUM_SOURCE_DIR}/CMakeLists.txt" STEL_MINOR_LINE REGEX "^SET\\(STELLARIUM_MINOR [0-9]+\\)")
+string(REGEX REPLACE ".* ([0-9]+)\\)" "\\1" STEL_MAJOR "${STEL_MAJOR_LINE}")
+string(REGEX REPLACE ".* ([0-9]+)\\)" "\\1" STEL_MINOR "${STEL_MINOR_LINE}")
+if(NOT STEL_MAJOR MATCHES "^[0-9]+$" OR NOT STEL_MINOR MATCHES "^[0-9]+$")
+	message(FATAL_ERROR "Could not read the Stellarium version from ${STELLARIUM_SOURCE_DIR}/CMakeLists.txt")
+endif()
+set(STELLARIUM_TARGET_VERSION "${STEL_MAJOR}.${STEL_MINOR}")
+message(STATUS "Building for Stellarium ${STELLARIUM_TARGET_VERSION}")
+
+if(APPLE)
+	execute_process(COMMAND /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${STELLARIUM_APP}/Contents/Info.plist"
+	                OUTPUT_VARIABLE STEL_APP_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+	if(STEL_APP_VERSION AND NOT STEL_APP_VERSION MATCHES "^${STEL_MAJOR}\\.${STEL_MINOR}(\\.|$)")
+		message(FATAL_ERROR "Version mismatch: ${STELLARIUM_APP} is Stellarium ${STEL_APP_VERSION}, "
+		                    "but STELLARIUM_SOURCE_DIR is Stellarium ${STELLARIUM_TARGET_VERSION}. Use the sources of the same version.")
+	endif()
 endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
@@ -80,6 +101,7 @@ target_compile_definitions(MosaicPlanner PRIVATE
 	ENABLE_MEDIA ENABLE_GPS ENABLE_NLS ENABLE_SHOWMYSKY
 	_USE_MATH_DEFINES QT_NO_DEBUG
 	MOSAICPLANNER_VERSION="${PROJECT_VERSION}"
+	MOSAICPLANNER_STELLARIUM_VERSION="${STELLARIUM_TARGET_VERSION}"
 )
 
 set(QT_MODULES Core Gui Widgets OpenGL OpenGLWidgets)

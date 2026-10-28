@@ -41,7 +41,8 @@ Requirements: Stellarium **24.1 or newer** on macOS (Apple Silicon or Intel). Th
    If it doesn't appear, enable *Load at startup* for Mosaic Planner under *Configuration → Plugins* and restart.
 
 **Troubleshooting:** if the plug-in doesn't load, open `~/Library/Application Support/Stellarium/log.txt` and search for `MosaicPlanner`.
-"library load disallowed by system policy" means the `xattr` step was skipped. Any other load error usually means a different Stellarium version.
+"library load disallowed by system policy" means the `xattr` step was skipped.
+"This build of the plug-in is for Stellarium X" or "uses incompatible Qt library" means the zip doesn't match your Stellarium version: install the zip for your version. This also applies after updating Stellarium.
 
 **Uninstall:** quit Stellarium and delete the `modules/MosaicPlanner` folder.
 
@@ -81,7 +82,7 @@ When a new Stellarium version comes out, add it to `DEFAULT_STELLARIUM_VERSIONS`
 
 ## Limitations
 
-- Like every external Stellarium plug-in, it must be rebuilt for each Stellarium version.
+- Like every external Stellarium plug-in, it must be rebuilt for each Stellarium version. Since 0.1.1 the plug-in checks the Stellarium version at startup and refuses to load into a different version instead of crashing. Version 0.1.0 has no such check.
 - The Oculars device lists are private. They are read through a standard C++ accessor and the headers of the matching Oculars version, so a header mismatch would break the build or the plug-in.
 - The Telescopius CSV has one overlap value; the horizontal overlap is written there.
 - Only macOS has been built and tested. Linux should work with the same CMake file. Windows would need an import library for Stellarium.
