@@ -36,7 +36,10 @@
 
 #include <cmath>
 
-#define MOSAICPLANNER_VERSION "0.1.0"
+// Normally set from the project version in CMakeLists.txt
+#ifndef MOSAICPLANNER_VERSION
+#define MOSAICPLANNER_VERSION "unknown"
+#endif
 
 using mosaic::Vec3;
 

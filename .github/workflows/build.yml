@@ -1,0 +1,197 @@
+# Builds the plug-in for several Stellarium releases.
+#
+# - push / pull request: build all default versions (compatibility check)
+# - tag v*:             build all default versions and attach the zips to the GitHub release
+# - manual run:         build the Stellarium versions given as input (artifacts only)
+#
+# A plug-in only works with the Stellarium version it was built for. For every version we
+# download the official macOS app, check out the matching sources and install the exact
+# Qt version that is bundled with that app.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      stellarium_versions:
+        description: 'Comma-separated Stellarium versions, e.g. "25.3,26.3" (empty = default list)'
+        required: false
+        default: ''
+
+env:
+  # Stellarium releases to build for by default
+  DEFAULT_STELLARIUM_VERSIONS: '25.3,25.4,26.1,26.2,26.3'
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.config.outputs.versions }}
+      plugin_version: ${{ steps.config.outputs.plugin_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: config
+        name: Determine versions
+        env:
+          INPUT_VERSIONS: ${{ inputs.stellarium_versions }}
+        run: |
+          list="${INPUT_VERSIONS:-$DEFAULT_STELLARIUM_VERSIONS}"
+          versions=$(echo "$list" | tr -d ' ' | jq -R -c 'split(",") | map(select(length > 0))')
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+
+          plugin_version=$(sed -nE 's/^project\(MosaicPlanner VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
+          echo "plugin_version=$plugin_version" >> "$GITHUB_OUTPUT"
+          echo "Plug-in $plugin_version for Stellarium $versions"
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$plugin_version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the project version $plugin_version in CMakeLists.txt"
+            exit 1
+          fi
+
+  build:
+    needs: setup
+    name: Stellarium ${{ matrix.stellarium }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        stellarium: ${{ fromJSON(needs.setup.outputs.versions) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STELLARIUM_VERSION: ${{ matrix.stellarium }}
+      PLUGIN_VERSION: ${{ needs.setup.outputs.plugin_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Stellarium ${{ matrix.stellarium }}
+        run: |
+          asset="Stellarium-$STELLARIUM_VERSION-qt6-macOS.zip"
+          gh release download "v$STELLARIUM_VERSION" -R Stellarium/stellarium -p "$asset" -D "$RUNNER_TEMP/download"
+          ditto -x -k "$RUNNER_TEMP/download/$asset" "$RUNNER_TEMP/app"
+          rm -f "$RUNNER_TEMP/download/$asset"
+
+          app=$(find "$RUNNER_TEMP/app" -maxdepth 3 -name Stellarium.app -type d | head -1)
+          if [[ -z "$app" ]]; then
+            echo "::error::Stellarium.app not found in $asset"
+            exit 1
+          fi
+          qt=$(otool -L "$app/Contents/MacOS/stellarium" | sed -nE 's/.*QtCore.*current version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
+          if [[ -z "$qt" ]]; then
+            echo "::error::Could not determine the Qt version bundled with Stellarium $STELLARIUM_VERSION"
+            exit 1
+          fi
+          echo "Stellarium $STELLARIUM_VERSION at $app uses Qt $qt"
+          echo "STELLARIUM_APP=$app" >> "$GITHUB_ENV"
+          echo "QT_VERSION=$qt" >> "$GITHUB_ENV"
+
+      - name: Check out Stellarium ${{ matrix.stellarium }} sources
+        run: |
+          src="$RUNNER_TEMP/stellarium-src"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch "v$STELLARIUM_VERSION" \
+            https://github.com/Stellarium/stellarium.git "$src"
+          git -C "$src" sparse-checkout set src plugins/Oculars
+          echo "STELLARIUM_SOURCE_DIR=$src" >> "$GITHUB_ENV"
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet aqtinstall
+          "$RUNNER_TEMP/venv/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 -O "$RUNNER_TEMP/Qt"
+          echo "QT_DIR=$RUNNER_TEMP/Qt/$QT_VERSION/macos" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_DIR" \
+            -DSTELLARIUM_SOURCE_DIR="$STELLARIUM_SOURCE_DIR" \
+            -DSTELLARIUM_APP="$STELLARIUM_APP"
+          cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          lib=build/libMosaicPlanner.dylib
+          lipo -archs "$lib"
+          otool -L "$lib"
+          # Sign both architectures ad hoc (the linker only signs the arm64 slice)
+          codesign --force --sign - "$lib"
+
+          name="MosaicPlanner-$PLUGIN_VERSION-Stellarium-$STELLARIUM_VERSION-macOS"
+          mkdir -p "pkg/MosaicPlanner" dist
+          cp "$lib" pkg/MosaicPlanner/
+          (cd pkg && zip -qr "../dist/$name.zip" MosaicPlanner)
+          unzip -l "dist/$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MosaicPlanner-Stellarium-${{ matrix.stellarium }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    # Only publish when every Stellarium version built successfully
+    if: github.ref_type == 'tag'
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      PLUGIN_VERSION: ${{ needs.setup.outputs.plugin_version }}
+      VERSIONS: ${{ join(fromJSON(needs.setup.outputs.versions), ', ') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum -- *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release notes
+        run: |
+          cat > notes.md <<EOF
+          Mosaic Planner $PLUGIN_VERSION for **Stellarium $VERSIONS** on macOS (universal binary for Apple Silicon and Intel).
+
+          A plug-in only works with the Stellarium version it was built for: download the zip whose name matches your Stellarium version (*Help → About* in Stellarium).
+
+          ### Installation
+          1. Quit Stellarium.
+          2. Download the matching zip and run in Terminal (replace \`<version>\` with your Stellarium version):
+             \`\`\`sh
+             mkdir -p ~/Library/Application\ Support/Stellarium/modules
+             cd ~/Library/Application\ Support/Stellarium/modules
+             unzip -o ~/Downloads/MosaicPlanner-$PLUGIN_VERSION-Stellarium-<version>-macOS.zip
+             xattr -dr com.apple.quarantine MosaicPlanner
+             \`\`\`
+             The \`xattr\` step is required: the plug-in isn't notarized by Apple, so macOS blocks a downloaded copy until the download flag is removed.
+          3. Start Stellarium and use the Mosaic Planner toolbar button.
+
+          More details and troubleshooting are in the [README](https://github.com/$GITHUB_REPOSITORY#installation-macos).
+          SHA-256 checksums are in \`SHA256SUMS.txt\`.
+          EOF
+          cat notes.md
+
+      - name: Publish
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" dist/*.zip dist/SHA256SUMS.txt \
+              --title "Mosaic Planner $PLUGIN_VERSION" --notes-file notes.md
+          fi
