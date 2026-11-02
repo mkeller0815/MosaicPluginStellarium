@@ -101,6 +101,11 @@ double tangentSize(double fovDeg)
 	return 2. * std::tan(0.5 * fovDeg * kDegToRad);
 }
 
+double scaledFovDeg(double fovDeg, double scale)
+{
+	return 2. * std::atan(scale * std::tan(0.5 * fovDeg * kDegToRad)) / kDegToRad;
+}
+
 static double mosaicTangentWidth(const MosaicParams& p)
 {
 	const double w = tangentSize(p.fovXDeg);

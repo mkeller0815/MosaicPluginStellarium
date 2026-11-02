@@ -98,6 +98,9 @@ double positionAngleOfPoint(const Vec3& c, const Vec3& p);
 
 //! Size of the full panel in tangent-plane units (2*tan(fov/2)).
 double tangentSize(double fovDeg);
+//! Field of view of a sensor whose linear size is scaled by the given factor
+//! (e.g. a camera's built-in mosaic mode covering 1.5x the native field).
+double scaledFovDeg(double fovDeg, double scale);
 //! Width/height of the whole mosaic, in degrees.
 double mosaicWidthDeg(const MosaicParams& p);
 double mosaicHeightDeg(const MosaicParams& p);

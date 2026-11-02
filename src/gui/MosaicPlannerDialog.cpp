@@ -36,6 +36,7 @@
 #include <QRegularExpression>
 #include <QRadioButton>
 #include <QSignalBlocker>
+#include <QSlider>
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QTabWidget>
@@ -60,6 +61,21 @@ QPushButton* makeButton(const QString& text, QWidget* parent)
 	auto* button = new QPushButton(text, parent);
 	button->setAutoDefault(false);
 	return button;
+}
+
+// Panel scale sliders work in hundredths: 100..200 = 1.00x..2.00x
+QSlider* makeScaleSlider(QWidget* parent)
+{
+	auto* slider = new QSlider(Qt::Horizontal, parent);
+	slider->setRange(100, 200);
+	slider->setSingleStep(1);
+	slider->setPageStep(10);
+	return slider;
+}
+
+QString scaleString(double scale)
+{
+	return QString("%1×").arg(scale, 0, 'f', 2);
 }
 
 QString arcminString(double deg)
@@ -165,6 +181,27 @@ void MosaicPlannerDialog::createDialogContent()
 	manualForm->addRow(q_("Sensor width:"), sensorWidthSpin);
 	manualForm->addRow(q_("Sensor height:"), sensorHeightSpin);
 	equipmentLayout->addWidget(manualBox);
+
+	auto* scaleForm = new QFormLayout();
+	scaleForm->setContentsMargins(0, 0, 0, 0);
+	auto makeScaleRow = [equipmentGroup](QSlider*& slider, QLabel*& label) {
+		auto* row = new QHBoxLayout();
+		slider = makeScaleSlider(equipmentGroup);
+		label = new QLabel(scaleString(2.), equipmentGroup);
+		label->setMinimumWidth(label->sizeHint().width());
+		label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+		row->addWidget(slider);
+		row->addWidget(label);
+		return row;
+	};
+	scaleForm->addRow(q_("Internal mosaic scale X:"), makeScaleRow(scaleXSlider, scaleXLabel));
+	scaleForm->addRow(q_("Internal mosaic scale Y:"), makeScaleRow(scaleYSlider, scaleYLabel));
+	const QString scaleTip = q_("Enlarges each panel for cameras with a built-in mosaic mode that covers more than the native sensor field");
+	scaleXSlider->setToolTip(scaleTip);
+	scaleYSlider->setToolTip(scaleTip);
+	syncScaleCheck = new QCheckBox(q_("Same scale for X and Y"), equipmentGroup);
+	scaleForm->addRow(syncScaleCheck);
+	equipmentLayout->addLayout(scaleForm);
 
 	framingLabel = new QLabel(equipmentGroup);
 	framingLabel->setWordWrap(true);
@@ -288,6 +325,10 @@ void MosaicPlannerDialog::createDialogContent()
 	connect(sensorWidthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), plugin, &MosaicPlanner::setManualSensorWidth);
 	connect(sensorHeightSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), plugin, &MosaicPlanner::setManualSensorHeight);
 
+	connect(scaleXSlider, &QSlider::valueChanged, this, [this](int value) { plugin->setPanelScaleX(value / 100.); });
+	connect(scaleYSlider, &QSlider::valueChanged, this, [this](int value) { plugin->setPanelScaleY(value / 100.); });
+	connect(syncScaleCheck, &QCheckBox::toggled, plugin, &MosaicPlanner::setSyncPanelScale);
+
 	connect(columnsSpin, QOverload<int>::of(&QSpinBox::valueChanged), plugin, &MosaicPlanner::setColumns);
 	connect(rowsSpin, QOverload<int>::of(&QSpinBox::valueChanged), plugin, &MosaicPlanner::setRows);
 	connect(overlapHSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), plugin, &MosaicPlanner::setOverlapH);
@@ -373,7 +414,8 @@ void MosaicPlannerDialog::updateFromModule()
 		const QSignalBlocker b1(targetNameEdit), b2(raSpin), b3(decSpin), b4(ocularsRadio), b5(manualRadio),
 		        b6(focalSpin), b7(sensorWidthSpin), b8(sensorHeightSpin), b9(columnsSpin), b10(rowsSpin),
 		        b11(overlapHSpin), b12(overlapVSpin), b13(rotationSpin), b14(syncRotationCheck),
-		        b15(constantRotationCheck), b16(showCheck), b17(editModeCheck), b18(labelsCheck), b19(fillCheck);
+		        b15(constantRotationCheck), b16(showCheck), b17(editModeCheck), b18(labelsCheck), b19(fillCheck),
+		        b20(scaleXSlider), b21(scaleYSlider), b22(syncScaleCheck);
 
 		if (!targetNameEdit->hasFocus())
 			targetNameEdit->setText(plugin->getTargetName());
@@ -391,6 +433,11 @@ void MosaicPlannerDialog::updateFromModule()
 		focalSpin->setValue(plugin->getManualFocalLength());
 		sensorWidthSpin->setValue(plugin->getManualSensorWidth());
 		sensorHeightSpin->setValue(plugin->getManualSensorHeight());
+		scaleXSlider->setValue(qRound(plugin->getPanelScaleX() * 100.));
+		scaleYSlider->setValue(qRound(plugin->getPanelScaleY() * 100.));
+		scaleXLabel->setText(scaleString(plugin->getPanelScaleX()));
+		scaleYLabel->setText(scaleString(plugin->getPanelScaleY()));
+		syncScaleCheck->setChecked(plugin->getSyncPanelScale());
 
 		columnsSpin->setValue(plugin->getColumns());
 		rowsSpin->setValue(plugin->getRows());

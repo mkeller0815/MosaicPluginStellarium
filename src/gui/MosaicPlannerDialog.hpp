@@ -25,6 +25,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QRadioButton;
+class QSlider;
 class QSpinBox;
 class QTableWidget;
 class QWidget;
@@ -79,6 +80,11 @@ private:
 	QDoubleSpinBox* focalSpin = nullptr;
 	QDoubleSpinBox* sensorWidthSpin = nullptr;
 	QDoubleSpinBox* sensorHeightSpin = nullptr;
+	QSlider* scaleXSlider = nullptr;
+	QSlider* scaleYSlider = nullptr;
+	QLabel* scaleXLabel = nullptr;
+	QLabel* scaleYLabel = nullptr;
+	QCheckBox* syncScaleCheck = nullptr;
 	QLabel* framingLabel = nullptr;
 
 	QSpinBox* columnsSpin = nullptr;

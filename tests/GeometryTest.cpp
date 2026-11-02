@@ -53,6 +53,17 @@ static void testBasics()
 	CHECK_NEAR(normalizeDeg360(720.), 0., 1e-12);
 }
 
+static void testScaledFov()
+{
+	CHECK_NEAR(scaledFovDeg(1.5, 1.), 1.5, 1e-12);
+	// Scaling is linear on the tangent plane, i.e. on the sensor
+	CHECK_NEAR(tangentSize(scaledFovDeg(3., 1.7)), 1.7 * tangentSize(3.), 1e-12);
+	// For small fields it is practically linear in angle
+	CHECK_NEAR(scaledFovDeg(0.5, 2.), 1., 1e-4);
+	// ...but not for wide fields: 90° doubled is 2*atan(2), not 180°
+	CHECK_NEAR(scaledFovDeg(90., 2.), 126.869897646, 1e-6);
+}
+
 static void testSinglePanel()
 {
 	MosaicParams p;
@@ -125,6 +136,7 @@ static void testFormatting()
 int main()
 {
 	testBasics();
+	testScaledFov();
 	testSinglePanel();
 	testGrid();
 	testFormatting();

@@ -50,6 +50,9 @@ class MosaicPlanner : public StelModule
 	Q_PROPERTY(double manualFocalLength  READ getManualFocalLength  WRITE setManualFocalLength   NOTIFY mosaicChanged)
 	Q_PROPERTY(double manualSensorWidth  READ getManualSensorWidth  WRITE setManualSensorWidth   NOTIFY mosaicChanged)
 	Q_PROPERTY(double manualSensorHeight READ getManualSensorHeight WRITE setManualSensorHeight  NOTIFY mosaicChanged)
+	Q_PROPERTY(double panelScaleX        READ getPanelScaleX        WRITE setPanelScaleX         NOTIFY mosaicChanged)
+	Q_PROPERTY(double panelScaleY        READ getPanelScaleY        WRITE setPanelScaleY         NOTIFY mosaicChanged)
+	Q_PROPERTY(bool syncPanelScale       READ getSyncPanelScale     WRITE setSyncPanelScale      NOTIFY mosaicChanged)
 	Q_PROPERTY(bool syncRotation         READ getSyncRotation       WRITE setSyncRotation        NOTIFY mosaicChanged)
 	Q_PROPERTY(bool constantRotation     READ getConstantRotation   WRITE setConstantRotation    NOTIFY mosaicChanged)
 	Q_PROPERTY(bool editMode             READ getEditMode           WRITE setEditMode            NOTIFY displayChanged)
@@ -83,6 +86,9 @@ public:
 	double getManualFocalLength() const { return manualFocalLength; }
 	double getManualSensorWidth() const { return manualSensorWidth; }
 	double getManualSensorHeight() const { return manualSensorHeight; }
+	double getPanelScaleX() const { return panelScaleX; }
+	double getPanelScaleY() const { return panelScaleY; }
+	bool getSyncPanelScale() const { return syncPanelScale; }
 	bool getSyncRotation() const { return syncRotation; }
 	bool getConstantRotation() const { return constantRotation; }
 	bool getEditMode() const { return editMode; }
@@ -93,7 +99,8 @@ public:
 	QString getTargetName() const { return targetName; }
 
 	OcularsBridge* getOcularsBridge() const { return bridge; }
-	//! The panel field of view currently in use (from Oculars or the manual setup). Returns false if unknown.
+	//! The panel field of view currently in use (from Oculars or the manual setup, enlarged by the
+	//! panel scale of the camera's internal mosaic mode). Returns false if unknown.
 	bool getPanelFov(double& fovXDeg, double& fovYDeg) const;
 	//! Pixel scale in arcsec/pixel, or 0 if unknown.
 	double getPixelScale() const;
@@ -116,6 +123,12 @@ public slots:
 	void setManualFocalLength(double mm);
 	void setManualSensorWidth(double mm);
 	void setManualSensorHeight(double mm);
+	//! Field enlargement of the camera's internal mosaic mode along the sensor width, 1..2.
+	void setPanelScaleX(double scale);
+	//! Field enlargement of the camera's internal mosaic mode along the sensor height, 1..2.
+	void setPanelScaleY(double scale);
+	//! If true both panel scales are kept equal.
+	void setSyncPanelScale(bool b);
 	void setSyncRotation(bool b);
 	void setConstantRotation(bool b);
 	void setEditMode(bool b);
@@ -185,6 +198,9 @@ private:
 	double manualFocalLength = 500.;
 	double manualSensorWidth = 23.5;
 	double manualSensorHeight = 15.7;
+	double panelScaleX = 1.;
+	double panelScaleY = 1.;
+	bool syncPanelScale = true;
 	bool syncRotation = false;
 	bool constantRotation = false;
 	bool editMode = false;

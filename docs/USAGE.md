@@ -58,7 +58,9 @@ The panel size is the field of view of your camera. It can come from two places:
   The field of view takes the lens multiplier and the sensor binning into account.
 - **Manual:** enter the **focal length** and the **sensor width and height** in millimetres. Use this if you don't use Oculars, or for equipment you haven't added to Oculars.
 
-The panel field of view is shown below the selection.
+**Internal mosaic scale X / Y:** some cameras and smart telescopes have a built-in mosaic mode that covers a larger field than the native sensor (for example 1.5× or 2×). Set the enlargement along the sensor width (X) and height (Y), from 1.00× to 2.00×, and each panel of the mosaic grows accordingly. The scale enlarges the area on the sensor, so for wide fields the angle grows slightly less than the factor. With **Same scale for X and Y** (on by default) both sliders move together; turning it on takes over the X value for Y. Leave both at 1.00× for a normal camera.
+
+The panel field of view, including the scale, is shown below the selection. The pixel scale stays that of the native sensor.
 
 ### Mosaic
 
@@ -86,7 +88,7 @@ The table lists every panel with its row, column, RA, Dec and position angle (PA
   N.I.N.A. (Sequencer → import of a Telescopius mosaic), ASIAIR, StellarMate and many other tools can import it.
   The format has only one overlap value; the horizontal overlap is written there.
 - **Export CSV (degrees)…:** writes one line per panel with RA and Dec in decimal degrees and in h:m:s / d:m:s, the position angle and the panel size. It is useful for spreadsheets and your own scripts.
-- **Save plan… / Load plan…:** saves or loads the whole plan as a JSON file. The file contains the target, center, grid, overlap, rotation, framing source and, with Oculars, the names of the telescope, sensor and lens.
+- **Save plan… / Load plan…:** saves or loads the whole plan as a JSON file. The file contains the target, center, grid, overlap, rotation, framing source, internal mosaic scale and, with Oculars, the names of the telescope, sensor and lens.
   When you load a plan, the same Oculars equipment is selected again by name if it exists.
 
 ## Display tab

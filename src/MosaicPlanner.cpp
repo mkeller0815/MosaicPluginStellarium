@@ -163,6 +163,9 @@ QJsonObject paramsToJson(const MosaicPlanner* m)
 	o["manualFocalLength"] = m->getManualFocalLength();
 	o["manualSensorWidth"] = m->getManualSensorWidth();
 	o["manualSensorHeight"] = m->getManualSensorHeight();
+	o["panelScaleX"] = m->getPanelScaleX();
+	o["panelScaleY"] = m->getPanelScaleY();
+	o["syncPanelScale"] = m->getSyncPanelScale();
 	double fx = 0., fy = 0.;
 	if (m->getPanelFov(fx, fy))
 	{
@@ -274,12 +277,16 @@ bool MosaicPlanner::getPanelFov(double& fovXDeg, double& fovYDeg) const
 			return false;
 		fovXDeg = f.fovXDeg;
 		fovYDeg = f.fovYDeg;
-		return true;
 	}
-	if (manualFocalLength <= 0. || manualSensorWidth <= 0. || manualSensorHeight <= 0.)
-		return false;
-	fovXDeg = qRadiansToDegrees(2. * qAtan(manualSensorWidth / (2. * manualFocalLength)));
-	fovYDeg = qRadiansToDegrees(2. * qAtan(manualSensorHeight / (2. * manualFocalLength)));
+	else
+	{
+		if (manualFocalLength <= 0. || manualSensorWidth <= 0. || manualSensorHeight <= 0.)
+			return false;
+		fovXDeg = qRadiansToDegrees(2. * qAtan(manualSensorWidth / (2. * manualFocalLength)));
+		fovYDeg = qRadiansToDegrees(2. * qAtan(manualSensorHeight / (2. * manualFocalLength)));
+	}
+	fovXDeg = mosaic::scaledFovDeg(fovXDeg, panelScaleX);
+	fovYDeg = mosaic::scaledFovDeg(fovYDeg, panelScaleY);
 	return true;
 }
 
@@ -670,6 +677,39 @@ void MosaicPlanner::setManualSensorHeight(double mm)
 	changed();
 }
 
+void MosaicPlanner::setPanelScaleX(double scale)
+{
+	scale = qBound(1., scale, 2.);
+	if (scale == panelScaleX && (!syncPanelScale || scale == panelScaleY))
+		return;
+	panelScaleX = scale;
+	if (syncPanelScale)
+		panelScaleY = scale;
+	changed();
+}
+
+void MosaicPlanner::setPanelScaleY(double scale)
+{
+	scale = qBound(1., scale, 2.);
+	if (scale == panelScaleY && (!syncPanelScale || scale == panelScaleX))
+		return;
+	panelScaleY = scale;
+	if (syncPanelScale)
+		panelScaleX = scale;
+	changed();
+}
+
+void MosaicPlanner::setSyncPanelScale(bool b)
+{
+	if (b == syncPanelScale)
+		return;
+	syncPanelScale = b;
+	// Adopt the horizontal scale for both axes
+	if (syncPanelScale)
+		panelScaleY = panelScaleX;
+	changed();
+}
+
 void MosaicPlanner::setSyncRotation(bool b)
 {
 	if (b == syncRotation)
@@ -879,6 +919,11 @@ bool MosaicPlanner::loadPlan(const QString& path)
 	setManualFocalLength(o.value("manualFocalLength").toDouble(manualFocalLength));
 	setManualSensorWidth(o.value("manualSensorWidth").toDouble(manualSensorWidth));
 	setManualSensorHeight(o.value("manualSensorHeight").toDouble(manualSensorHeight));
+	// Plans written before the panel scale existed use the native field
+	setSyncPanelScale(false);
+	setPanelScaleX(o.value("panelScaleX").toDouble(1.));
+	setPanelScaleY(o.value("panelScaleY").toDouble(1.));
+	setSyncPanelScale(o.value("syncPanelScale").toBool(panelScaleX == panelScaleY));
 	setUseOculars(o.value("useOculars").toBool(useOculars));
 	if (useOculars && bridge->isAvailable())
 	{
@@ -918,6 +963,9 @@ void MosaicPlanner::restoreDefaultSettings()
 	conf->setValue("manual_focal_length", 500.);
 	conf->setValue("manual_sensor_width", 23.5);
 	conf->setValue("manual_sensor_height", 15.7);
+	conf->setValue("panel_scale_x", 1.);
+	conf->setValue("panel_scale_y", 1.);
+	conf->setValue("sync_panel_scale", true);
 	conf->setValue("sync_rotation", false);
 	conf->setValue("constant_rotation", false);
 	conf->setValue("show_labels", true);
@@ -942,6 +990,9 @@ void MosaicPlanner::loadSettings()
 	manualFocalLength = conf->value("manual_focal_length", manualFocalLength).toDouble();
 	manualSensorWidth = conf->value("manual_sensor_width", manualSensorWidth).toDouble();
 	manualSensorHeight = conf->value("manual_sensor_height", manualSensorHeight).toDouble();
+	panelScaleX = qBound(1., conf->value("panel_scale_x", panelScaleX).toDouble(), 2.);
+	panelScaleY = qBound(1., conf->value("panel_scale_y", panelScaleY).toDouble(), 2.);
+	syncPanelScale = conf->value("sync_panel_scale", syncPanelScale).toBool();
 	syncRotation = conf->value("sync_rotation", syncRotation).toBool();
 	constantRotation = conf->value("constant_rotation", constantRotation).toBool();
 	showLabels = conf->value("show_labels", showLabels).toBool();
@@ -968,6 +1019,9 @@ void MosaicPlanner::saveSettings()
 	conf->setValue("manual_focal_length", manualFocalLength);
 	conf->setValue("manual_sensor_width", manualSensorWidth);
 	conf->setValue("manual_sensor_height", manualSensorHeight);
+	conf->setValue("panel_scale_x", panelScaleX);
+	conf->setValue("panel_scale_y", panelScaleY);
+	conf->setValue("sync_panel_scale", syncPanelScale);
 	conf->setValue("sync_rotation", syncRotation);
 	conf->setValue("constant_rotation", constantRotation);
 	conf->setValue("show_labels", showLabels);
