@@ -53,19 +53,25 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 
-# Tests for the pure geometry code (no Stellarium/Qt needed)
-option(MOSAICPLANNER_BUILD_TESTS "Build the geometry tests" ON)
+# Tests for the pure geometry and import code (no Stellarium/Qt needed)
+option(MOSAICPLANNER_BUILD_TESTS "Build the geometry and import tests" ON)
 if(MOSAICPLANNER_BUILD_TESTS)
 	enable_testing()
 	add_executable(GeometryTest tests/GeometryTest.cpp src/MosaicGeometry.cpp)
 	set_target_properties(GeometryTest PROPERTIES AUTOMOC OFF)
 	target_include_directories(GeometryTest PRIVATE src)
 	add_test(NAME GeometryTest COMMAND GeometryTest)
+	add_executable(ImportTest tests/ImportTest.cpp src/MosaicImport.cpp src/MosaicGeometry.cpp)
+	set_target_properties(ImportTest PROPERTIES AUTOMOC OFF)
+	target_include_directories(ImportTest PRIVATE src)
+	add_test(NAME ImportTest COMMAND ImportTest)
 endif()
 
 set(SOURCES
 	src/MosaicGeometry.cpp
 	src/MosaicGeometry.hpp
+	src/MosaicImport.cpp
+	src/MosaicImport.hpp
 	src/OcularsBridge.cpp
 	src/OcularsBridge.hpp
 	src/MosaicPlanner.cpp

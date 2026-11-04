@@ -26,6 +26,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -274,11 +275,55 @@ void MosaicPlannerDialog::createDialogContent()
 	auto* planButtons = new QHBoxLayout();
 	auto* savePlanButton = makeButton(q_("Save plan…"), panelsTab);
 	auto* loadPlanButton = makeButton(q_("Load plan…"), panelsTab);
+	auto* importCsvButton = makeButton(q_("Import CSV…"), panelsTab);
+	importCsvButton->setToolTip(q_("Import a mosaic from a Telescopius CSV or from the degrees CSV export"));
 	planButtons->addStretch();
+	planButtons->addWidget(importCsvButton);
 	planButtons->addWidget(savePlanButton);
 	planButtons->addWidget(loadPlanButton);
 	panelsLayout->addLayout(planButtons);
 	tabs->addTab(panelsTab, q_("Panels"));
+
+	// ---------------------------------------------------------------- Reference tab
+	auto* referenceTab = new QWidget();
+	auto* referenceLayout = new QVBoxLayout(referenceTab);
+	auto* imageGroup = new QGroupBox(q_("Reference image"), referenceTab);
+	auto* imageLayout = new QVBoxLayout(imageGroup);
+	auto* referenceHint = new QLabel(q_("Load a plate-solved FITS file (or an astrometry.net .wcs file) of a panel you have "
+	                                    "already captured. Only the header is read. Its frame is shown on the sky."), imageGroup);
+	referenceHint->setWordWrap(true);
+	imageLayout->addWidget(referenceHint);
+	auto* referenceButtons = new QHBoxLayout();
+	auto* loadReferenceButton = makeButton(q_("Load FITS…"), imageGroup);
+	clearReferenceButton = makeButton(q_("Clear"), imageGroup);
+	referenceButtons->addWidget(loadReferenceButton);
+	referenceButtons->addWidget(clearReferenceButton);
+	referenceButtons->addStretch();
+	imageLayout->addLayout(referenceButtons);
+	referenceInfoLabel = new QLabel(imageGroup);
+	referenceInfoLabel->setWordWrap(true);
+	referenceInfoLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	imageLayout->addWidget(referenceInfoLabel);
+	showReferenceCheck = new QCheckBox(q_("Show reference frame"), imageGroup);
+	imageLayout->addWidget(showReferenceCheck);
+	referenceLayout->addWidget(imageGroup);
+
+	auto* matchGroup = new QGroupBox(q_("Match with a panel"), referenceTab);
+	auto* matchForm = new QFormLayout(matchGroup);
+	referencePanelCombo = new QComboBox(matchGroup);
+	matchForm->addRow(q_("Panel:"), referencePanelCombo);
+	referenceMatchLabel = new QLabel(matchGroup);
+	referenceMatchLabel->setWordWrap(true);
+	matchForm->addRow(referenceMatchLabel);
+	alignButton = makeButton(q_("Align mosaic to reference"), matchGroup);
+	alignButton->setToolTip(q_("Move and rotate the whole mosaic so that this panel coincides with the reference image"));
+	auto* alignRow = new QHBoxLayout();
+	alignRow->addWidget(alignButton);
+	alignRow->addStretch();
+	matchForm->addRow(alignRow);
+	referenceLayout->addWidget(matchGroup);
+	referenceLayout->addStretch();
+	tabs->addTab(referenceTab, q_("Reference"));
 
 	// ---------------------------------------------------------------- Display tab
 	auto* displayTab = new QWidget();
@@ -344,6 +389,17 @@ void MosaicPlannerDialog::createDialogContent()
 	connect(exportDecimalButton, &QPushButton::clicked, this, &MosaicPlannerDialog::exportDecimal);
 	connect(savePlanButton, &QPushButton::clicked, this, &MosaicPlannerDialog::savePlan);
 	connect(loadPlanButton, &QPushButton::clicked, this, &MosaicPlannerDialog::loadPlan);
+	connect(importCsvButton, &QPushButton::clicked, this, &MosaicPlannerDialog::importCsv);
+
+	connect(loadReferenceButton, &QPushButton::clicked, this, &MosaicPlannerDialog::loadReference);
+	connect(clearReferenceButton, &QPushButton::clicked, plugin, &MosaicPlanner::clearReferenceImage);
+	connect(showReferenceCheck, &QCheckBox::toggled, plugin, &MosaicPlanner::setShowReference);
+	connect(referencePanelCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+		plugin->setSelectedPanel(index);
+		updateReference();
+	});
+	connect(alignButton, &QPushButton::clicked, this, [this]() { plugin->alignToReference(referencePanelCombo->currentIndex()); });
+	connect(plugin, &MosaicPlanner::referenceChanged, this, &MosaicPlannerDialog::scheduleUpdate);
 
 	connect(showCheck, &QCheckBox::toggled, plugin, &MosaicPlanner::setEnabled);
 	connect(editModeCheck, &QCheckBox::toggled, plugin, &MosaicPlanner::setEditMode);
@@ -476,6 +532,7 @@ void MosaicPlannerDialog::updateFromModule()
 
 	if (tableDirty)
 		updatePanelTable();
+	updateReference();
 }
 
 void MosaicPlannerDialog::updatePanelTable()
@@ -573,6 +630,115 @@ void MosaicPlannerDialog::savePlan()
 	const QString path = askSaveFile(q_("Save mosaic plan"), ".json", q_("Mosaic plan (*.json)"));
 	if (!path.isEmpty() && !plugin->savePlan(path))
 		messageBox(q_("Mosaic Planner"), q_("Could not write the file."));
+}
+
+void MosaicPlannerDialog::updateReference()
+{
+	if (!dialog)
+		return;
+	const bool loaded = plugin->hasReference();
+	clearReferenceButton->setEnabled(loaded);
+	{
+		const QSignalBlocker blocker(showReferenceCheck);
+		showReferenceCheck->setChecked(plugin->getShowReference());
+	}
+
+	const int count = static_cast<int>(plugin->getPanels().size());
+	if (referencePanelCombo->count() != count)
+	{
+		const QSignalBlocker blocker(referencePanelCombo);
+		const int current = referencePanelCombo->currentIndex();
+		referencePanelCombo->clear();
+		for (int i = 1; i <= count; ++i)
+			referencePanelCombo->addItem(QString(q_("Panel %1")).arg(i));
+		referencePanelCombo->setCurrentIndex(count > 0 ? qBound(0, current, count - 1) : -1);
+	}
+	referencePanelCombo->setEnabled(loaded && count > 0);
+	alignButton->setEnabled(loaded && count > 0);
+
+	if (!loaded)
+	{
+		referenceInfoLabel->setText(q_("No reference image loaded."));
+		referenceMatchLabel->clear();
+		selectBestReferencePanel = true;
+		return;
+	}
+
+	const mosaic::ReferenceFrame& ref = plugin->getReference();
+	double ra, dec;
+	mosaic::vecToRaDec(ref.center, ra, dec);
+	QStringList info;
+	info << QString("<b>%1</b>").arg(QFileInfo(plugin->getReferencePath()).fileName().toHtmlEscaped());
+	if (!ref.object.empty())
+		info << QString(q_("Object: %1")).arg(QString::fromStdString(ref.object).toHtmlEscaped());
+	if (!ref.dateObs.empty())
+		info << QString(q_("Date: %1")).arg(QString::fromStdString(ref.dateObs).toHtmlEscaped());
+	info << QString(q_("Center: %1 / %2"))
+	                .arg(StelUtils::radToHmsStr(qDegreesToRadians(ra), true).trimmed(), StelUtils::radToDmsStr(qDegreesToRadians(dec), true));
+	QString size = QString(q_("Field: %1 × %2 (%3 × %4 px)"))
+	                       .arg(arcminString(ref.fovXDeg), arcminString(ref.fovYDeg)).arg(ref.width).arg(ref.height);
+	if (ref.pixelScaleArcsec > 0.)
+		size += QString(", %1\"/px").arg(ref.pixelScaleArcsec, 0, 'f', 2);
+	info << size;
+	if (ref.hasWcs)
+		info << QString(q_("Position angle of the image y axis: %1°")).arg(mosaic::positionAngleOf(ref.center, ref.axisY), 0, 'f', 2);
+	else
+		info << q_("The file is not plate solved: the position comes from the mount and the rotation is unknown. "
+		           "Aligning only moves the mosaic.");
+	referenceInfoLabel->setText(info.join("<br>"));
+
+	const int best = plugin->getReferenceBestPanel();
+	if (selectBestReferencePanel && best >= 0)
+	{
+		const QSignalBlocker blocker(referencePanelCombo);
+		referencePanelCombo->setCurrentIndex(best);
+		selectBestReferencePanel = false;
+	}
+	double offset, rotation;
+	if (plugin->getReferenceMatch(referencePanelCombo->currentIndex(), offset, rotation))
+	{
+		QString match = QString(q_("Offset from the panel center: %1")).arg(arcminString(offset / 60.));
+		if (ref.hasWcs)
+			match += "<br>" + QString(q_("Rotation relative to the panel: %1°")).arg(rotation, 0, 'f', 2);
+		if (best >= 0)
+			match += "<br>" + QString(q_("Closest panel: %1")).arg(best + 1);
+		referenceMatchLabel->setText(match);
+	}
+	else
+		referenceMatchLabel->clear();
+}
+
+void MosaicPlannerDialog::loadReference()
+{
+	const QString dir = plugin->hasReference() ? QFileInfo(plugin->getReferencePath()).absolutePath()
+	                                           : QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+	const QString path = QFileDialog::getOpenFileName(&StelMainView::getInstance(), q_("Load reference image"), dir,
+	                                                  q_("FITS files (*.fits *.fit *.fts *.new *.wcs);;All files (*)"));
+	if (path.isEmpty())
+		return;
+	QString error;
+	if (!plugin->loadReferenceFile(path, error))
+	{
+		messageBox(q_("Mosaic Planner"), q_("Could not load the reference image.") + "\n" + error);
+		return;
+	}
+	plugin->setShowReference(true);
+	selectBestReferencePanel = true;
+	updateReference();
+	plugin->setSelectedPanel(referencePanelCombo->currentIndex());
+}
+
+void MosaicPlannerDialog::importCsv()
+{
+	const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+	const QString path = QFileDialog::getOpenFileName(&StelMainView::getInstance(), q_("Import mosaic CSV"), dir, "CSV (*.csv *.txt)");
+	if (path.isEmpty())
+		return;
+	QString error, note;
+	if (!plugin->importCsvFile(path, error, note))
+		messageBox(q_("Mosaic Planner"), q_("This file is not a valid mosaic CSV.") + "\n" + error);
+	else if (!note.isEmpty())
+		messageBox(q_("Mosaic Planner"), note);
 }
 
 void MosaicPlannerDialog::loadPlan()

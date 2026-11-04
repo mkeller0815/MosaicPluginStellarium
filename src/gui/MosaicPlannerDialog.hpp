@@ -54,6 +54,9 @@ private slots:
 	void exportDecimal();
 	void savePlan();
 	void loadPlan();
+	void importCsv();
+	void loadReference();
+	void updateReference();
 	void chooseColor();
 	void gotoSelectedPanel();
 
@@ -103,6 +106,15 @@ private:
 	QCheckBox* labelsCheck = nullptr;
 	QCheckBox* fillCheck = nullptr;
 	QPushButton* colorButton = nullptr;
+
+	QLabel* referenceInfoLabel = nullptr;
+	QPushButton* clearReferenceButton = nullptr;
+	QCheckBox* showReferenceCheck = nullptr;
+	QComboBox* referencePanelCombo = nullptr;
+	QLabel* referenceMatchLabel = nullptr;
+	QPushButton* alignButton = nullptr;
+	//! Select the panel closest to the reference image at the next update
+	bool selectBestReferencePanel = true;
 };
 
 #endif // MOSAICPLANNERDIALOG_HPP

@@ -90,6 +90,24 @@ The table lists every panel with its row, column, RA, Dec and position angle (PA
 - **Export CSV (degrees)…:** writes one line per panel with RA and Dec in decimal degrees and in h:m:s / d:m:s, the position angle and the panel size. It is useful for spreadsheets and your own scripts.
 - **Save plan… / Load plan…:** saves or loads the whole plan as a JSON file. The file contains the target, center, grid, overlap, rotation, framing source, internal mosaic scale and, with Oculars, the names of the telescope, sensor and lens.
   When you load a plan, the same Oculars equipment is selected again by name if it exists.
+- **Import CSV…:** loads a mosaic from a CSV file, for example one made on the Telescopius website or exported by this plug-in. Both the Telescopius format and the degrees export are understood, with `,` or `;` as separator. The file needs a row and a column for every panel, and RA and Dec (decimal degrees or sexagesimal).
+  The grid, overlap, position angle and the rotation mode (*Same rotation for all panels*) are rebuilt from the panel coordinates. The target name comes from the file, or else from the file name.
+  If the panel size in the file differs from your current camera framing, the framing is switched to *Manual* with a sensor size that gives exactly that panel size at the current manual focal length. A message tells you when this happens.
+  The Telescopius format rounds RA to whole seconds of time, so the imported center can be a few arcseconds off.
+
+## Reference tab
+
+Once you have captured the first panel, it often doesn't land exactly where it was planned. With a reference image you can see where it really is, and shift the rest of the mosaic so that the other panels continue from it with the planned overlap.
+
+1. Plate solve a frame of the panel (for example with ASTAP, astrometry.net or the solver in N.I.N.A.), so that its FITS header contains the WCS.
+2. Click **Load FITS…** and select the file. Only the header is read, so large files load instantly. Astrometry.net `.wcs` files work too.
+3. The frame of the image is drawn on the sky in light blue, and the closest panel is selected under **Match with a panel**. The tab shows the image center, field, pixel scale, and the offset and rotation of the image relative to that panel.
+4. Choose another panel if needed, then click **Align mosaic to reference**. The whole mosaic is moved and rotated so that this panel coincides with the image. The grid, overlap and panel size don't change.
+
+The image may be in portrait while the panels are in landscape, or rotated by 180°: the matching image axis is used automatically.
+If the file isn't plate solved, the plug-in uses the pointing coordinates (`RA`/`DEC` or `OBJCTRA`/`OBJCTDEC`), the focal length (`FOCALLEN`) and the pixel size (`XPIXSZ`). The rotation is unknown then, so aligning only moves the mosaic.
+
+**Show reference frame** shows or hides the frame, and **Clear** removes it. The *Display* settings *Fill panels* and *Show panel numbers and title* also apply to the frame (the title is the file name). The reference image is remembered and reloaded at the next start of Stellarium.
 
 ## Display tab
 
@@ -114,6 +132,7 @@ All settings are saved automatically and restored at the next start of Stellariu
 4. Check the panels against bright stars or the horizon using *Go to panel* and the Oculars frame.
 5. Save the plan, so you can change it later, and export the Telescopius CSV for your capture software.
 6. When imaging, set your camera rotator, or rotate the camera by hand, to the position angle from the table.
+7. After the first panel, load its plate-solved FITS file on the *Reference* tab and click *Align mosaic to reference*. Then export the CSV again for the remaining panels.
 
 ## Scripting
 
@@ -132,7 +151,7 @@ MosaicPlanner.gotoMosaic();
 MosaicPlanner.exportTelescopiusCsv("/Users/me/Desktop/M31.csv");
 ```
 
-Other slots: `centerOnSelectedObject()`, `centerOnView()`, `gotoPanel(index)` (index starts at 0), `exportDecimalCsv(path)`, `savePlan(path)`, `loadPlan(path)`, `setUseOculars(bool)`, `setManualFocalLength(mm)`, `setManualSensorWidth(mm)`, `setManualSensorHeight(mm)`, `setSyncRotation(bool)`, `setConstantRotation(bool)`, `setEditMode(bool)`, `setShowLabels(bool)`, `setFillPanels(bool)`, `setDialogVisible(bool)`, `restoreDefaultSettings()`.
+Other slots: `centerOnSelectedObject()`, `centerOnView()`, `gotoPanel(index)` (index starts at 0), `exportDecimalCsv(path)`, `savePlan(path)`, `loadPlan(path)`, `importCsv(path)`, `loadReferenceImage(path)`, `clearReferenceImage()`, `alignToReference(index)` (index starts at 0, -1 = closest panel), `setShowReference(bool)`, `setUseOculars(bool)`, `setManualFocalLength(mm)`, `setManualSensorWidth(mm)`, `setManualSensorHeight(mm)`, `setSyncRotation(bool)`, `setConstantRotation(bool)`, `setEditMode(bool)`, `setShowLabels(bool)`, `setFillPanels(bool)`, `setDialogVisible(bool)`, `restoreDefaultSettings()`.
 
 ## Questions
 

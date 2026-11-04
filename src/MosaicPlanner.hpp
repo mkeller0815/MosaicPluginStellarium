@@ -12,6 +12,7 @@
 #define MOSAICPLANNER_HPP
 
 #include "MosaicGeometry.hpp"
+#include "MosaicImport.hpp"
 #include "OcularsBridge.hpp"
 
 #include "StelModule.hpp"
@@ -61,6 +62,7 @@ class MosaicPlanner : public StelModule
 	Q_PROPERTY(Vec3f lineColor           READ getLineColor          WRITE setLineColor           NOTIFY displayChanged)
 	Q_PROPERTY(int selectedPanel         READ getSelectedPanel      WRITE setSelectedPanel       NOTIFY selectedPanelChanged)
 	Q_PROPERTY(QString targetName        READ getTargetName         WRITE setTargetName          NOTIFY mosaicChanged)
+	Q_PROPERTY(bool showReference        READ getShowReference      WRITE setShowReference       NOTIFY referenceChanged)
 
 public:
 	MosaicPlanner();
@@ -97,6 +99,7 @@ public:
 	Vec3f getLineColor() const { return lineColor; }
 	int getSelectedPanel() const { return selectedPanel; }
 	QString getTargetName() const { return targetName; }
+	bool getShowReference() const { return showReference; }
 
 	OcularsBridge* getOcularsBridge() const { return bridge; }
 	//! The panel field of view currently in use (from Oculars or the manual setup, enlarged by the
@@ -108,6 +111,20 @@ public:
 	QString getFramingDescription() const;
 	mosaic::MosaicParams getParams() const;
 	std::vector<mosaic::Panel> getPanels() const;
+
+	//! Import a mosaic CSV (Telescopius format or the degrees export). If the panel size in the file differs
+	//! from the current framing, the framing is switched to manual and note explains it.
+	bool importCsvFile(const QString& path, QString& error, QString& note);
+	//! Load the footprint of a reference image from the header of a FITS (or astrometry.net .wcs) file.
+	bool loadReferenceFile(const QString& path, QString& error);
+	bool hasReference() const { return referenceLoaded; }
+	const mosaic::ReferenceFrame& getReference() const { return reference; }
+	QString getReferencePath() const { return referencePath; }
+	//! Index (0-based) of the panel closest to the reference image, or -1.
+	int getReferenceBestPanel() const;
+	//! Distance between the reference image and a panel (arcmin) and the smallest rotation of the image
+	//! relative to the panel (degrees, positive towards east). Returns false if unknown.
+	bool getReferenceMatch(int index, double& offsetArcmin, double& rotationDeg) const;
 
 public slots:
 	void setEnabled(bool b);
@@ -155,6 +172,15 @@ public slots:
 	bool savePlan(const QString& path) const;
 	//! Load a plan from a JSON file.
 	bool loadPlan(const QString& path);
+	//! Import a mosaic from a CSV file (Telescopius format or the degrees export).
+	bool importCsv(const QString& path);
+
+	//! Load a plate-solved reference image (only its FITS header is read).
+	bool loadReferenceImage(const QString& path);
+	void clearReferenceImage();
+	void setShowReference(bool b);
+	//! Move and rotate the mosaic so that the given panel (0-based, -1 = closest) coincides with the reference image.
+	bool alignToReference(int index = -1);
 
 	//! Show or hide the Mosaic Planner window.
 	void setDialogVisible(bool visible);
@@ -167,6 +193,7 @@ signals:
 	void mosaicChanged();
 	void displayChanged();
 	void selectedPanelChanged(int index);
+	void referenceChanged();
 
 private slots:
 	void onOcularsFramingChanged();
@@ -177,6 +204,7 @@ private:
 	void changed();
 	Vec3d centerVector() const;
 	void drawCross(class StelPainter& painter, const mosaic::Vec3& center, double size) const;
+	void drawReference(class StelPainter& painter) const;
 
 	QSettings* conf = nullptr;
 	OcularsBridge* bridge = nullptr;
@@ -209,6 +237,11 @@ private:
 	Vec3f lineColor = Vec3f(1.f, 0.55f, 0.f);
 	int selectedPanel = -1;
 	QString targetName;
+
+	bool referenceLoaded = false;
+	mosaic::ReferenceFrame reference;
+	QString referencePath;
+	bool showReference = true;
 
 	// Mouse dragging state
 	bool dragging = false;

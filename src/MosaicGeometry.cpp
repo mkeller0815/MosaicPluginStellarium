@@ -227,6 +227,48 @@ int panelAt(const std::vector<Panel>& panels, const MosaicParams& p, const Vec3&
 	return best;
 }
 
+int nearestPanel(const std::vector<Panel>& panels, const Vec3& v)
+{
+	const Vec3 n = v.normalized();
+	int best = -1;
+	double bestDot = -2.;
+	for (size_t i = 0; i < panels.size(); ++i)
+	{
+		const double d = panels[i].center.dot(n);
+		if (d > bestDot)
+		{
+			bestDot = d;
+			best = static_cast<int>(i);
+		}
+	}
+	return best;
+}
+
+MosaicParams alignPanelTo(const MosaicParams& p, int index, const Frame& target)
+{
+	MosaicParams q = p;
+	// Aligned panels are rigidly attached to the mosaic frame, so one rotation of the sphere is exact.
+	// With constant rotation the panel PAs refer to north, which moves with the mosaic: iterate.
+	for (int iteration = 0; iteration < 20; ++iteration)
+	{
+		const std::vector<Panel> panels = computePanels(q);
+		if (index < 0 || index >= static_cast<int>(panels.size()))
+			return p;
+		const Panel& k = panels[static_cast<size_t>(index)];
+		if ((k.center - target.center).length() + (k.up - target.up).length() < 1e-12)
+			break;
+		// Rotation that maps the panel frame onto the target frame
+		auto rotate = [&](const Vec3& v) {
+			return target.center * k.center.dot(v) + target.up * k.up.dot(v) + target.right * k.right.dot(v);
+		};
+		const Frame m = frameAt(raDecToVec(q.raDeg, q.decDeg), q.paDeg);
+		const Vec3 center = rotate(m.center).normalized();
+		vecToRaDec(center, q.raDeg, q.decDeg);
+		q.paDeg = positionAngleOf(center, rotate(m.up));
+	}
+	return q;
+}
+
 // Split a non-negative value into whole units, minutes and rounded seconds, carrying overflow.
 static void splitSexagesimal(double value, int& units, int& minutes, int& seconds)
 {

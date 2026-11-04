@@ -25,12 +25,14 @@
 #include "StelUtils.hpp"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QRegularExpression>
 #include <QTextStream>
 #include <QtMath>
 
@@ -79,7 +81,9 @@ StelPluginInfo MosaicPlannerStelPluginInterface::getPluginInfo() const
 	                      "The panel size and rotation are taken from the telescope, sensor and lens "
 	                      "selected in the Oculars plug-in (or from a manual setup). "
 	                      "Panels can be moved and rotated with the mouse and exported as CSV in the "
-	                      "Telescopius format for N.I.N.A., ASIAIR and other capture software.");
+	                      "Telescopius format for N.I.N.A., ASIAIR and other capture software. "
+	                      "Mosaics can be imported from CSV, and a plate-solved FITS image of a captured "
+	                      "panel can be used as a reference to align the mosaic.");
 	if (!isBuiltForRunningStellarium())
 		info.description = QString("<b>This build is for Stellarium %1 and will not be loaded into Stellarium %2. "
 		                           "Please install the matching version of the plug-in.</b><br>")
@@ -102,6 +106,9 @@ Vec3 rotateAround(const Vec3& v, const Vec3& k, double angle)
 	const double c = std::cos(angle), s = std::sin(angle);
 	return v * c + k.cross(v) * s + k * (k.dot(v) * (1. - c));
 }
+
+// Color of the reference image frame, distinct from the default mosaic color
+const Vec3f referenceColor(0.35f, 0.8f, 1.f);
 
 // Toolbar icon in the style of Stellarium's own buttons: 160x160, a white disc with a glow
 // when switched on, a grey disc when off, with a 2x2 mosaic of tilted panels as symbol.
@@ -386,15 +393,31 @@ void MosaicPlanner::drawCross(StelPainter& painter, const Vec3& center, double s
 	painter.drawGreatCircleArc(toStel((f.center + f.up * t).normalized()), toStel((f.center - f.up * t).normalized()));
 }
 
+void MosaicPlanner::drawReference(StelPainter& painter) const
+{
+	const std::array<Vec3, 4>& c = reference.corners;
+	if (fillPanels)
+	{
+		SphericalConvexPolygon poly(toStel(c[0]), toStel(c[1]), toStel(c[2]), toStel(c[3]));
+		painter.setColor(referenceColor, 0.1f);
+		painter.drawSphericalRegion(&poly, StelPainter::SphericalPolygonDrawModeFill);
+	}
+	painter.setLineWidth(1.5f * static_cast<float>(painter.getProjector()->getDevicePixelsPerPixel()));
+	painter.setColor(referenceColor, 1.f);
+	for (int k = 0; k < 4; ++k)
+		painter.drawGreatCircleArc(toStel(c[static_cast<size_t>(k)]), toStel(c[static_cast<size_t>((k + 1) % 4)]));
+	painter.setLineWidth(1.f);
+	if (showLabels)
+	{
+		const float gap = 4.f * static_cast<float>(painter.getProjector()->getDevicePixelsPerPixel());
+		painter.drawText(toStel(reference.center), QFileInfo(referencePath).fileName(), 0.f, gap, gap);
+	}
+}
+
 void MosaicPlanner::draw(StelCore* core)
 {
 	if (!flagEnabled)
 		return;
-	const mosaic::MosaicParams params = getParams();
-	if (params.fovXDeg <= 0.)
-		return;
-	const std::vector<mosaic::Panel> panels = mosaic::computePanels(params);
-
 	const StelProjectorP prj = core->getProjection(StelCore::FrameJ2000);
 	StelPainter painter(prj);
 	painter.setFont(font);
@@ -402,6 +425,14 @@ void MosaicPlanner::draw(StelCore* core)
 	painter.setLineSmooth(true);
 	const float ppx = static_cast<float>(prj->getDevicePixelsPerPixel());
 	const QFontMetrics fm = painter.getFontMetrics();
+
+	if (referenceLoaded && showReference)
+		drawReference(painter);
+
+	const mosaic::MosaicParams params = getParams();
+	if (params.fovXDeg <= 0.)
+		return;
+	const std::vector<mosaic::Panel> panels = mosaic::computePanels(params);
 
 	for (size_t i = 0; i < panels.size(); ++i)
 	{
@@ -780,6 +811,16 @@ void MosaicPlanner::setTargetName(const QString& name)
 	changed();
 }
 
+void MosaicPlanner::setShowReference(bool b)
+{
+	if (b == showReference)
+		return;
+	showReference = b;
+	if (conf)
+		conf->setValue("MosaicPlanner/show_reference", b);
+	emit referenceChanged();
+}
+
 /////////////////////////////////////////////////////////////////////////////
 // Actions
 
@@ -943,6 +984,164 @@ bool MosaicPlanner::loadPlan(const QString& path)
 	return true;
 }
 
+bool MosaicPlanner::importCsv(const QString& path)
+{
+	QString error, note;
+	return importCsvFile(path, error, note);
+}
+
+bool MosaicPlanner::importCsvFile(const QString& path, QString& error, QString& note)
+{
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly))
+	{
+		error = q_("Could not read the file.");
+		return false;
+	}
+	mosaic::ImportedMosaic imported;
+	mosaic::MosaicParams p = getParams();
+	std::string message;
+	if (!mosaic::parseMosaicCsv(file.readAll().toStdString(), imported, message) || !mosaic::fitMosaicParams(imported, p, message))
+	{
+		error = QString::fromStdString(message);
+		return false;
+	}
+
+	double fovX = 0., fovY = 0.;
+	if (!getPanelFov(fovX, fovY) || std::fabs(p.fovXDeg / fovX - 1.) > 0.005 || std::fabs(p.fovYDeg / fovY - 1.) > 0.005)
+	{
+		// Reproduce the panel size of the file with a manual framing, keeping the manual focal length
+		setUseOculars(false);
+		setSyncPanelScale(false);
+		setPanelScaleX(1.);
+		setPanelScaleY(1.);
+		setSyncPanelScale(true);
+		setManualSensorWidth(2. * manualFocalLength * std::tan(0.5 * qDegreesToRadians(p.fovXDeg)));
+		setManualSensorHeight(2. * manualFocalLength * std::tan(0.5 * qDegreesToRadians(p.fovYDeg)));
+		note = QString(q_("The panel size in the file (%1' × %2') differs from the camera framing. "
+		                  "The framing was switched to manual with that panel size."))
+		               .arg(p.fovXDeg * 60., 0, 'f', 1).arg(p.fovYDeg * 60., 0, 'f', 1);
+	}
+
+	QString name = QString::fromStdString(imported.name);
+	if (name.isEmpty())
+	{
+		// Exported files are named "<target>_<columns>x<rows>.csv"
+		name = QFileInfo(path).completeBaseName();
+		name.remove(QRegularExpression("_\\d+x\\d+$"));
+		name.replace('_', ' ');
+	}
+	setTargetName(name.trimmed());
+	setColumns(p.columns);
+	setRows(p.rows);
+	setOverlapH(p.overlapX * 100.);
+	setOverlapV(p.overlapY * 100.);
+	setConstantRotation(p.constantRotation);
+	setCenter(p.raDeg, p.decDeg);
+	setRotation(p.paDeg);
+	saveSettings();
+	return true;
+}
+
+bool MosaicPlanner::loadReferenceImage(const QString& path)
+{
+	QString error;
+	return loadReferenceFile(path, error);
+}
+
+bool MosaicPlanner::loadReferenceFile(const QString& path, QString& error)
+{
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly))
+	{
+		error = q_("Could not read the file.");
+		return false;
+	}
+	// Only the header is needed: read blocks of 2880 bytes up to the END card
+	QByteArray data;
+	bool end = false;
+	while (!end && data.size() < 2880 * 100)
+	{
+		const QByteArray block = file.read(2880);
+		if (block.isEmpty())
+			break;
+		data += block;
+		for (qsizetype pos = data.size() - block.size(); pos + 80 <= data.size() && !end; pos += 80)
+			end = data.mid(pos, 8) == "END     ";
+	}
+	mosaic::FitsHeader header;
+	if (!mosaic::parseFitsHeader(data.toStdString(), header))
+	{
+		error = q_("This is not a FITS file.");
+		return false;
+	}
+	mosaic::ReferenceFrame ref;
+	std::string message;
+	if (!mosaic::referenceFromFits(header, ref, message))
+	{
+		error = QString::fromStdString(message);
+		return false;
+	}
+	reference = ref;
+	referencePath = path;
+	referenceLoaded = true;
+	if (conf)
+		conf->setValue("MosaicPlanner/reference_image", path);
+	emit referenceChanged();
+	return true;
+}
+
+void MosaicPlanner::clearReferenceImage()
+{
+	if (!referenceLoaded)
+		return;
+	referenceLoaded = false;
+	reference = mosaic::ReferenceFrame();
+	referencePath.clear();
+	if (conf)
+		conf->remove("MosaicPlanner/reference_image");
+	emit referenceChanged();
+}
+
+int MosaicPlanner::getReferenceBestPanel() const
+{
+	return referenceLoaded ? mosaic::nearestPanel(getPanels(), reference.center) : -1;
+}
+
+bool MosaicPlanner::getReferenceMatch(int index, double& offsetArcmin, double& rotationDeg) const
+{
+	const mosaic::MosaicParams params = getParams();
+	const std::vector<mosaic::Panel> panels = mosaic::computePanels(params);
+	if (!referenceLoaded || index < 0 || index >= static_cast<int>(panels.size()))
+		return false;
+	const mosaic::Panel& panel = panels[static_cast<size_t>(index)];
+	const mosaic::Frame target = mosaic::referenceTargetFrame(reference, panel, params.fovXDeg, params.fovYDeg);
+	offsetArcmin = qRadiansToDegrees(std::acos(qBound(-1., panel.center.dot(target.center), 1.))) * 60.;
+	rotationDeg = mosaic::normalizeDeg360(mosaic::positionAngleOf(target.center, target.up) - panel.paDeg);
+	if (rotationDeg > 180.)
+		rotationDeg -= 360.;
+	return true;
+}
+
+bool MosaicPlanner::alignToReference(int index)
+{
+	const mosaic::MosaicParams params = getParams();
+	const std::vector<mosaic::Panel> panels = mosaic::computePanels(params);
+	if (!referenceLoaded || panels.empty())
+		return false;
+	if (index < 0)
+		index = mosaic::nearestPanel(panels, reference.center);
+	if (index >= static_cast<int>(panels.size()))
+		return false;
+	const mosaic::Frame target = mosaic::referenceTargetFrame(reference, panels[static_cast<size_t>(index)], params.fovXDeg, params.fovYDeg);
+	const mosaic::MosaicParams aligned = mosaic::alignPanelTo(params, index, target);
+	setCenter(aligned.raDeg, aligned.decDeg);
+	setRotation(aligned.paDeg);
+	setSelectedPanel(index);
+	saveSettings();
+	return true;
+}
+
 /////////////////////////////////////////////////////////////////////////////
 // Settings
 
@@ -971,6 +1170,7 @@ void MosaicPlanner::restoreDefaultSettings()
 	conf->setValue("show_labels", true);
 	conf->setValue("fill_panels", true);
 	conf->setValue("line_color", "1.0,0.55,0.0");
+	conf->setValue("show_reference", true);
 	conf->endGroup();
 }
 
@@ -998,7 +1198,14 @@ void MosaicPlanner::loadSettings()
 	showLabels = conf->value("show_labels", showLabels).toBool();
 	fillPanels = conf->value("fill_panels", fillPanels).toBool();
 	lineColor = Vec3f(conf->value("line_color", "1.0,0.55,0.0").toString());
+	showReference = conf->value("show_reference", showReference).toBool();
+	const QString referenceImage = conf->value("reference_image").toString();
 	conf->endGroup();
+
+	// The reference image may have been moved or deleted since
+	QString error;
+	if (!referenceImage.isEmpty() && !loadReferenceFile(referenceImage, error))
+		qWarning().noquote() << "[MosaicPlanner] Could not load the reference image" << referenceImage << ":" << error;
 }
 
 void MosaicPlanner::saveSettings()
@@ -1027,5 +1234,8 @@ void MosaicPlanner::saveSettings()
 	conf->setValue("show_labels", showLabels);
 	conf->setValue("fill_panels", fillPanels);
 	conf->setValue("line_color", lineColor.toStr());
+	conf->setValue("show_reference", showReference);
+	if (referenceLoaded)
+		conf->setValue("reference_image", referencePath);
 	conf->endGroup();
 }

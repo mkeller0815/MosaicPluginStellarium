@@ -14,6 +14,8 @@ The panel size and rotation come from the **telescope, sensor and lens selected 
 - A panel table with RA/Dec/PA for each panel. Double-click a panel to go to it. With the Oculars sensor frame on, you see that panel's exact framing.
 - Export as **Telescopius CSV**, which N.I.N.A., ASIAIR, StellarMate and similar tools can import. You can also export a CSV in decimal degrees.
 - Save and load plans as JSON. Loading a plan reselects the same Oculars equipment by name.
+- Import a mosaic from a CSV file (Telescopius format or the degrees export). Grid, overlap, position angle and panel size are rebuilt from the panel coordinates.
+- Load a plate-solved FITS file of a panel you have already captured as a **reference image**. Its frame is shown on the sky and the mosaic can be aligned to it, so that the remaining panels continue from where the first one really landed.
 - Scriptable: every setting is a property or slot of the `MosaicPlanner` module (for example `MosaicPlanner.setColumns(3)`).
 
 Conventions: coordinates are J2000. The position angle is the direction of the sensor's "up" axis (the short side for a landscape sensor), measured from north through east. This is the same convention as the Telescopius CSV. Oculars' rotation angle is the negative of this.
@@ -66,7 +68,7 @@ You need:
 git clone --depth 1 --branch v25.3 https://github.com/Stellarium/stellarium.git _deps/stellarium-src
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/usr/local   # path to your Qt 6
 cmake --build build
-ctest --test-dir build          # geometry tests
+ctest --test-dir build          # geometry and import tests
 cmake --install build           # -> ~/Library/Application Support/Stellarium/modules/MosaicPlanner/
 ```
 
@@ -94,6 +96,7 @@ When a new Stellarium version comes out, add it to `DEFAULT_STELLARIUM_VERSIONS`
 - Like every external Stellarium plug-in, it must be rebuilt for each Stellarium version. Since 0.1.1 the plug-in checks the Stellarium version at startup and refuses to load into a different version instead of crashing. Version 0.1.0 has no such check.
 - The Oculars device lists are private. They are read through a standard C++ accessor and the headers of the matching Oculars version, so a header mismatch would break the build or the plug-in.
 - The Telescopius CSV has one overlap value; the horizontal overlap is written there.
+- Reference images: only the header is read (the image itself is not shown), with a TAN projection. SIP distortion terms are ignored.
 - Only macOS has been built and tested. Linux should work with the same CMake file. Windows would need an import library for Stellarium.
 
 ## License

@@ -113,6 +113,11 @@ bool projectToFrame(const Frame& f, const Vec3& p, double& x, double& y);
 bool mosaicContains(const MosaicParams& p, const Vec3& v);
 //! Index (0-based) of the panel containing v, or -1. If panels overlap the panel whose center is closest wins.
 int panelAt(const std::vector<Panel>& panels, const MosaicParams& p, const Vec3& v);
+//! Index (0-based) of the panel whose center is closest to v, or -1 if there are no panels.
+int nearestPanel(const std::vector<Panel>& panels, const Vec3& v);
+//! The same mosaic moved and rotated so that panel `index` has the center and up direction of `target`.
+//! Returns p unchanged if the index is invalid.
+MosaicParams alignPanelTo(const MosaicParams& p, int index, const Frame& target);
 
 //! "20hr 16' 00\"" style RA as used by the Telescopius CSV export.
 std::string formatRaTelescopius(double raDeg);
